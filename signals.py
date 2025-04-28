@@ -161,7 +161,7 @@ def media_consumer_declaration(sender, **kwargs):
 
     return {
         "parser": get_parser,
-        "weight": 10,
+        "weight": -1,
         "mime_types": OUR_MIME_TYPES
     }
 
