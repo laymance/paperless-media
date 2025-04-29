@@ -10,54 +10,35 @@ import os
 logger = logging.getLogger("paperless_media")
 
 ############################################################################
-# DEVELOPMENT NOTES
+# FILE EXTENSION & MIME TYPE HANDLING
 ############################################################################
 #
-# paperless-ngx stores files based on mime type instead of file extension.
-# This particularly comes into play when you try to download/retrieve a
-# file later from paperless. For example, if you register the mime type
-# application/octet-stream then storage will work but the following issue
-# will occur:
+# ISSUE: paperless-ngx uses mime types (not file extensions) for storage.
+# This creates problems when downloading files later.
 #
-# - If you use a single file extension when configuring the mime type, like:
-#   "application/octet-stream": ".afdesign"
-#   If you upload a file called myfile.afphoto, the file will be stored
-#   as myfile.afdesign and when you download it, it will download with the
-#   wrong extension.
+# PROBLEM EXAMPLE:
+# If you configure "application/octet-stream": ".afdesign" and upload 
+# myfile.afphoto, it will be stored and downloaded as myfile.afdesign.
 #
-# So as a workaround we will register extensions using valid mime types when
-# possible, like "video/mp4": ".mp4". However, when there isn't a mime type
-# for a file - or if the same mime type applies to multiple extensions
-# (e.g. yaml vs yml) - then we create a new mime type just for that extension.
-# The pre-save handler @receiver in this file activates whenever a file is
-# being saved. It juggles the mime types and saves the newly created one.
+# SOLUTION:
+# 1. For standard file types: Use proper mime types when possible
+#    Example: "video/mp4": ".mp4"
 #
-# For example: if you upload an Affinity Designer file called
-# mydesign.afdesign, it will be received with a mime type of
-# application/octet-stream. The pre-save handler checks the file and finds
-# that it needs a custom mime type, so it saves it in the database with a
-# mime type of "application/x-affinity-designer". This causes paperless-ngx
-# to assign the correct file extension when you download it later. Since
-# application/x-affinity-designer isn't a known mime type to web browsers,
-# it will treat it as a application/octet-stream and save it properly.
+# 2. For files with multiple extensions (yaml/yml): 
+#    - Use real mime type for one extension: "application/yaml": ".yaml"
+#    - Create custom mime type for others: "application/yml": ".yml"
 #
-############################################################################
+# 3. For generic mime types (application/octet-stream):
+#    - Create custom mime types for each extension
+#    - Example: "application/x-affinity-designer": ".afdesign"
 #
-# CLIFF NOTES:
-# This plugin has to juggle mime types, and some times use fake mime type
-# strings, in order to make paperless-ngx store the file properly and more
-# importantly... serve it back up properly later.
-# 
-# If a file type has mutliple file extensions, like .yaml vs .yml, an entry
-# will need to be added for the real mime type (application/yaml) for one of
-# the file extensions (e.g. .yaml), and then a fake mime type added for the
-# other file extension (e.g. applicaton/yml = .yml). This will allow both
-# file extensions to be saved and served up by paperless.
+# HOW IT WORKS:
+# The pre-save handler (@receiver) intercepts file saves and:
+#   - Determines the file's extension
+#   - Assigns the appropriate mime type from our mapping
+#   - For unknown extensions, creates and records new custom mime types
 #
-# If a file type falls under the mime-type of application/octet-stream, then
-# a fake mime type needs to be added with its file extension, otherwise the
-# file will be saved with no extension and served back up without an ext.
-#
+# This ensures files download later with their correct extensions.
 ############################################################################
 
 def _get_combined_mime_types():
