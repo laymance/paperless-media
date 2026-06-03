@@ -7,8 +7,12 @@ from PIL import Image, ImageDraw, ImageFont
 
 from documents.parsers import DocumentParser
 
+from tika_client import TikaClient
+import logging
+
 class MediaDocumentParser(DocumentParser):
     logging_name = "paperless.parsing.media"
+    logger = logging.getLogger("paperless_media")
 
     def get_random_color(self):
         """Generate a random, visually pleasing background color"""
@@ -127,6 +131,22 @@ class MediaDocumentParser(DocumentParser):
             if mime_type.startswith("audio/") or mime_type.startswith("video/") or mime_type == "application/octet-stream":
                 self.text = ""
                 return
+
+            if settings.TIKA_ENABLED and mime_type == "application/epub+zip":
+
+                self.logger.info("Sending content to Tika server")
+
+                try:
+                    with TikaClient(tika_url=settings.TIKA_ENDPOINT) as client:
+                        parsed = client.tika.as_text.from_file(document_path, mime_type)
+                        if parsed.content is not None:
+                            self.text = parsed.content.strip()
+                        else:
+                            self.text = ""
+                        return
+                except Exception as err:
+                    self.logger.warning(f"Could not parse content with tika server at {settings.TIKA_ENDPOINT}: {err}")
+                    self.text = ""
 
             # Attempt to read only the first 5 KB of the file
             with open(document_path, "rb") as file:
